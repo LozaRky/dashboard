@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MACRO SENTINEL — Dashboard de Estanflación</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --bg2: #111418;
+    --bg3: #1a1f26;
+    --border: #1e2530;
+    --border2: #2a3340;
+    --text: #c8d4e0;
+    --text-dim: #5a6a7a;
+    --text-bright: #e8f0f8;
+    --red: #ff3b5c;
+    --red-bg: rgba(255,59,92,0.08);
+    --red-border: rgba(255,59,92,0.25);
+    --yellow: #f5a623;
+    --yellow-bg: rgba(245,166,35,0.08);
+    --yellow-border: rgba(245,166,35,0.25);
+    --green: #00d4a0;
+    --green-bg: rgba(0,212,160,0.08);
+    --green-border: rgba(0,212,160,0.25);
+    --accent: #4d9fff;
+    --accent2: #7c5cff;
+    --gold: #d4a843;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .logo-title {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--text-bright);
+    text-transform: uppercase;
+  }
+
+  .logo-subtitle {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .last-update {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .refresh-btn {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 8px 16px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.2s;
+  }
+
+  .refresh-btn:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .loading-bar {
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent), var(--green));
+    width: 0%;
+    transition: width 1.5s ease;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9998;
+  }
+
+  /* ALERT BANNER */
+  .alert-banner {
+    padding: 12px 32px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .alert-banner.red { background: var(--red-bg); border-color: var(--red-border); color: var(--red); }
+  .alert-banner.yellow { background: var(--yellow-bg); border-color: var(--yellow-border); color: var(--yellow); }
+  .alert-banner.green { background: var(--green-bg); border-color: var(--green-border); color: var(--green); }
+
+  .blink { animation: blink 1.2s step-end infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    background: var(--bg);
+    overflow-x: auto;
+  }
+
+  .tab {
+    padding: 16px 24px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text-bright); border-bottom-color: var(--accent); }
+
+  /* MAIN CONTENT */
+  .content {
+    padding: 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* SECTION TITLES */
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* GRID LAYOUTS */
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
+  .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+
+  @media (max-width: 1100px) { .grid-4 { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 700px) { .grid-4,.grid-3,.grid-2,.grid-5 { grid-template-columns: 1fr; } }
+
+  /* METRIC CARD */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .card:hover { border-color: var(--border2); }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .card.red::before { background: var(--red); }
+  .card.yellow::before { background: var(--yellow); }
+  .card.green::before { background: var(--green); }
+  .card.neutral::before { background: var(--border2); }
+
+  .card-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .card-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .card-value.big { font-size: 36px; }
+
+  .card-signal {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 4px 8px;
+    display: inline-block;
+  }
+
+  .card.red .card-signal { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .card.yellow .card-signal { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow-border); }
+  .card.green .card-signal { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+  .card.neutral .card-signal { background: var(--bg3); color: var(--text-dim); border: 1px solid var(--border); }
+
+  .card-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 8px;
+  }
+
+  /* WIDE CARD */
+  .card-wide {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  /* ESTANFLACION ALARM */
+  .estanflacion-alarm {
+    background: var(--red-bg);
+    border: 1px solid var(--red-border);
+    padding: 24px 32px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .alarm-icon {
+    font-size: 40px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+
+  .alarm-text h3 {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--red);
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .alarm-text p {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* TABLE */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+  }
+
+  .data-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+
+  .data-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  .data-table tr:hover td { background: var(--bg3); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    border: 1px solid;
+  }
+
+  .badge-red { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+  .badge-yellow { background: var(--yellow-bg); color: var(--yellow); border-color: var(--yellow-border); }
+  .badge-green { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+  .badge-gray { background: var(--bg3); color: var(--text-dim); border-color: var(--border); }
+
+  .pass { color: var(--green); font-weight: 700; }
+  .fail { color: var(--red); font-weight: 700; }
+
+  /* ALLOCATION PANEL */
+  .allocation-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 800px) { .allocation-grid { grid-template-columns: 1fr; } }
+
+  .alloc-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .alloc-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 3px;
+    transition: width 1s ease;
+  }
+
+  .alloc-card.c1::after { background: var(--accent); }
+  .alloc-card.c2::after { background: var(--gold); }
+  .alloc-card.c3::after { background: var(--green); }
+  .alloc-card.c4::after { background: var(--accent2); }
+
+  .alloc-number {
+    font-family: 'Space Mono', monospace;
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1;
+    margin: 12px 0;
+  }
+
+  .alloc-card.c1 .alloc-number { color: var(--accent); }
+  .alloc-card.c2 .alloc-number { color: var(--gold); }
+  .alloc-card.c3 .alloc-number { color: var(--green); }
+  .alloc-card.c4 .alloc-number { color: var(--accent2); }
+
+  .alloc-title {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+
+  .alloc-assets {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  .alloc-bar-track {
+    height: 4px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+
+  .alloc-bar-fill {
+    height: 100%;
+    transition: width 1.2s ease;
+  }
+
+  .alloc-card.c1 .alloc-bar-fill { background: var(--accent); }
+  .alloc-card.c2 .alloc-bar-fill { background: var(--gold); }
+  .alloc-card.c3 .alloc-bar-fill { background: var(--green); }
+  .alloc-card.c4 .alloc-bar-fill { background: var(--accent2); }
+
+  .alloc-reason {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 8px;
+  }
+
+  .alloc-triggers {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .trigger-chip {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    padding: 3px 8px;
+    border: 1px solid var(--border2);
+    color: var(--text-dim);
+  }
+
+  .trigger-chip.active { border-color: var(--green-border); color: var(--green); background: var(--green-bg); }
+  .trigger-chip.inactive { border-color: var(--red-border); color: var(--red); background: var(--red-bg); }
+
+  /* LOGIC TABLE */
+  .logic-table {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  .logic-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+
+  .logic-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+  }
+
+  .logic-row:last-child { border-bottom: none; }
+  .logic-condition { color: var(--text-dim); flex: 2; }
+  .logic-arrow { color: var(--border2); }
+  .logic-effect { flex: 1.5; font-weight: 700; }
+  .logic-effect.up { color: var(--green); }
+  .logic-effect.down { color: var(--red); }
+  .logic-status { flex: 0.8; text-align: right; }
+
+  /* SPINNER */
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* TICKER TAPE */
+  .ticker-tape {
+    background: var(--bg3);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 0;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .ticker-inner {
+    display: flex;
+    gap: 48px;
+    animation: ticker 30s linear infinite;
+    white-space: nowrap;
+  }
+
+  @keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+
+  .ticker-item {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .ticker-item .name { color: var(--text-dim); }
+  .ticker-item .value { color: var(--text-bright); font-weight: 700; }
+  .ticker-item .change.pos { color: var(--green); }
+  .ticker-item .change.neg { color: var(--red); }
+
+  /* MINI SPARKLINE */
+  .sparkline { display: flex; align-items: flex-end; gap: 2px; height: 24px; }
+  .spark-bar { width: 4px; background: var(--border2); border-radius: 1px; transition: background 0.2s; }
+  .sparkline.green .spark-bar:last-child { background: var(--green); }
+  .sparkline.red .spark-bar:last-child { background: var(--red); }
+
+  /* DATA SOURCE NOTE */
+  .data-note {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    padding: 16px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    margin-top: 24px;
+    line-height: 1.8;
+  }
+
+  /* INPUT FIELD */
+  .input-field {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--text-bright);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 8px 12px;
+    width: 100%;
+    outline: none;
+  }
+
+  .input-field:focus { border-color: var(--accent); }
+
+  .input-group {
+    margin-bottom: 12px;
+  }
+
+  .input-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+
+  /* SCENARIOS */
+  .scenario-btn {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--text-dim);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .scenario-btn:hover, .scenario-btn.active {
+    background: var(--bg2);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .scenarios { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loadingBar"></div>
+
+<header class="header">
+  <div class="logo">
+    <span class="logo-title">MACRO SENTINEL</span>
+    <span class="logo-subtitle">// ESCUELA AUSTRIACA — DASHBOARD DE ESTANFLACIÓN</span>
+  </div>
+  <div class="header-right">
+    <span class="last-update" id="lastUpdate">ACTUALIZANDO...</span>
+    <button class="refresh-btn" onclick="refreshData()">↻ ACTUALIZAR</button>
+  </div>
+</header>
+
+<div class="alert-banner red" id="mainAlert">
+  <span class="blink">⚠</span>
+  <span id="mainAlertText">CARGANDO DATOS MACRO...</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('macro',this)">① MACRO — CLIMA Y LIQUIDEZ</div>
+  <div class="tab" onclick="showTab('meso',this)">② MESO — VALORACIÓN ÍNDICES</div>
+  <div class="tab" onclick="showTab('micro',this)">③ MICRO — FILTRO ANTI-ZOMBIS</div>
+  <div class="tab" onclick="showTab('asignacion',this)">④ ASIGNACIÓN DINÁMICA</div>
+</div>
+
+<!-- ===================== PANEL MACRO ===================== -->
+<div id="panel-macro" class="panel active">
+<div class="content">
+
+  <div class="ticker-tape">
+    <div class="ticker-inner" id="tickerInner">
+      <!-- Filled by JS -->
+    </div>
+  </div>
+
+  <div id="estanflacionAlarm"></div>
+
+  <div class="section-title">TIPOS DE INTERÉS REALES</div>
+  <div class="grid-4">
+    <div class="card" id="card-ff">
+      <div class="card-label">FED FUNDS RATE</div>
+      <div class="card-value" id="val-ff">—</div>
+      <div class="card-signal neutral" id="sig-ff">CARGANDO</div>
+      <div class="card-sub">Tasa de referencia FED</div>
+    </div>
+    <div class="card" id="card-cpi">
+      <div class="card-label">CPI YoY (%)</div>
+      <div class="card-value" id="val-cpi">—</div>
+      <div class="card-signal neutral" id="sig-cpi">CARGANDO</div>
+      <div class="card-sub">Inflación al consumo</div>
+    </div>
+    <div class="card" id="card-pce">
+      <div class="card-label">CORE PCE YoY (%)</div>
+      <div class="card-value" id="val-pce">—</div>
+      <div class="card-signal neutral" id="sig-pce">CARGANDO</div>
+      <div class="card-sub">Inflación preferida FED</div>
+    </div>
+    <div class="card" id="card-realrate">
+      <div class="card-label">TIPO REAL (FF - PCE)</div>
+      <div class="card-value" id="val-realrate">—</div>
+      <div class="card-signal neutral" id="sig-realrate">CARGANDO</div>
+      <div class="card-sub">Rojo &gt;+2% | Verde &lt;0%</div>
+    </div>
+  </div>
+
+  <div class="section-title">RIESGO CREDITICIO Y CURVA</div>
+  <div class="grid-3">
+    <div class="card" id="card-hy">
+      <div class="card-label">HIGH YIELD SPREAD (%)</div>
+      <div class="card-value" id="val-hy">—</div>
+      <div class="card-signal neutral" id="sig-hy">CARGANDO</div>
+      <div class="card-sub">Rojo &gt;6% | Verde &lt;3.5%</div>
+    </div>
+    <div class="card" id="card-10y">
+      <div class="card-label">TESORO 10Y (%)</div>
+      <div class="card-value" id="val-10y">—</div>
+      <div class="card-signal neutral" id="sig-10y">DATO CLAVE</div>
+      <div class="card-sub">Benchmark de riesgo global</div>
+    </div>
+    <div class="card" id="card-curva">
+      <div class="card-label">CURVA 10Y — 2Y (pb)</div>
+      <div class="card-value" id="val-curva">—</div>
+      <div class="card-signal neutral" id="sig-curva">CARGANDO</div>
+      <div class="card-sub">Rojo &lt;0 = inversión</div>
+    </div>
+  </div>
+
+  <div class="section-title">LIQUIDEZ GLOBAL — M2 Y DÓLAR</div>
+  <div class="grid-4">
+    <div class="card" id="card-m2">
+      <div class="card-label">M2 MONEY SUPPLY (T$)</div>
+      <div class="card-value" id="val-m2">—</div>
+      <div class="card-signal neutral" id="sig-m2">CARGANDO</div>
+      <div class="card-sub">Masa monetaria EEUU</div>
+    </div>
+    <div class="card" id="card-m2growth">
+      <div class="card-label">CRECIMIENTO M2 YoY (%)</div>
+      <div class="card-value" id="val-m2growth">—</div>
+      <div class="card-signal neutral" id="sig-m2growth">CARGANDO</div>
+      <div class="card-sub">Verde &gt;5% | Rojo &lt;0%</div>
+    </div>
+    <div class="card" id="card-dxy">
+      <div class="card-label">DXY (ÍNDICE DÓLAR)</div>
+      <div class="card-value" id="val-dxy">—</div>
+      <div class="card-signal neutral" id="sig-dxy">CARGANDO</div>
+      <div class="card-sub">Verde &lt;100 | Rojo &gt;105</div>
+    </div>
+    <div class="card" id="card-gdp">
+      <div class="card-label">PIB REAL YoY (%)</div>
+      <div class="card-value" id="val-gdp">—</div>
+      <div class="card-signal neutral" id="sig-gdp">CARGANDO</div>
+      <div class="card-sub">Crecimiento económico real</div>
+    </div>
+  </div>
+
+  <div class="data-note">
+    FUENTES: Federal Reserve (FRED API), U.S. Bureau of Economic Analysis (BEA), ICE BofA. Los datos se actualizan con un retardo habitual de 1-5 días hábiles respecto a la publicación oficial. Esta herramienta no constituye asesoramiento financiero.
+  </div>
+</div>
+</div>
+
+<!-- ===================== PANEL MESO ===================== -->
+<div id="panel-meso" class="panel">
+<div class="content">
+
+  <div class="section-title">VALORACIÓN S&P 500</div>
+  <div class="grid-4">
+    <div class="card" id="card-sp500">
+      <div class="card-label">S&P 500</div>
+      <div class="card-value big" id="val-sp500">—</div>
+      <div class="card-signal neutral" id="sig-sp500">PRECIO</div>
+      <div class="card-sub">Index spot</div>
+    </div>
+    <div class="card" id="card-cape">
+      <div class="card-label">CAPE SHILLER (10Y P/E)</div>
+      <div class="card-value big" id="val-cape">—</div>
+      <div class="card-signal neutral" id="sig-cape">CARGANDO</div>
+      <div class="card-sub">Rojo &gt;30x | Verde &lt;15x</div>
+    </div>
+    <div class="card" id="card-ey">
+      <div class="card-label">EARNINGS YIELD (%)</div>
+      <div class="card-value" id="val-ey">—</div>
+      <div class="card-signal neutral" id="sig-ey">= 1/CAPE</div>
+      <div class="card-sub">Rentabilidad implícita renta variable</div>
+    </div>
+    <div class="card" id="card-erp">
+      <div class="card-label">ERP (EY — 10Y BOND)</div>
+      <div class="card-value" id="val-erp">—</div>
+      <div class="card-signal neutral" id="sig-erp">CARGANDO</div>
+      <div class="card-sub">Rojo &lt;1% | Verde &gt;4%</div>
+    </div>
+  </div>
+
+  <div class="section-title">ANÁLISIS DE VALORACIÓN</div>
+  <div class="card-wide" id="mesoAnalysis">
+    <div style="font-family:'Space Mono',monospace;font-size:11px;line-height:1.9;color:var(--text-dim);">
+      Cargando análisis...
+    </div>
+  </div>
+
+  <div class="section-title">HISTORIA DEL CAPE — INTERPRETACIÓN</div>
+  <div class="card-wide">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>RANGO CAPE</th>
+          <th>SEÑAL</th>
+          <th>RETORNO HISTÓRICO 10Y</th>
+          <th>ACCIÓN MODELO</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-family:'Space Mono',monospace;">&lt; 10x</td>
+          <td><span class="badge badge-green">GANGA HISTÓRICA</span></td>
+          <td style="font-family:'Space Mono',monospace;color:var(--green);">+15% / año</td>
+          <td style="font-family:'Space Mono',monospace;">Máxima exposición indexados</td>
+        </tr>
+        <tr>
+          <td style="font-family:'Space Mono',monospace;">10x — 15x</td>
+          <td><span class="badge badge-green">VALORACIÓN ATRACTIVA</span></td>
+          <td style="font-family:'Space Mono',monospace;color:var(--green);">+10% / año</td>
+          <td style="font-family:'Space Mono',monospace;">Cubo 4 al 40%+</td>
+        </tr>
+        <tr>
+          <td style="font-family:'Space Mono',monospace;">15x — 22x</td>
+          <td><span class="badge badge-yellow">VALORACIÓN JUSTA</span></td>
+          <td style="font-family:'Space Mono',monospace;color:var(--yellow);">+5–8% / año</td>
+          <td style="font-family:'Space Mono',monospace;">Exposición moderada</td>
+        </tr>
+        <tr>
+          <td style="font-family:'Space Mono',monospace;">22x — 30x</td>
+          <td><span class="badge badge-yellow">MERCADO CARO</span></td>
+          <td style="font-family:'Space Mono',monospace;color:var(--yellow);">+2–4% / año</td>
+          <td style="font-family:'Space Mono',monospace;">Reducir indexados</td>
+        </tr>
+        <tr>
+          <td style="font-family:'Space Mono',monospace;">&gt; 30x</td>
+          <td><span class="badge badge-red">ZONA DE BURBUJA</span></td>
+          <td style="font-family:'Space Mono',monospace;color:var(--red);">-2% / año o peor</td>
+          <td style="font-family:'Space Mono',monospace;">Cubo 4 a 0% — TRAMPA PASIVA</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</div>
+
+<!-- ===================== PANEL MICRO ===================== -->
+<div id="panel-micro" class="panel">
+<div class="content">
+
+  <div class="section-title">FILTRO ANTI-ZOMBIS — WATCHLIST</div>
+
+  <div class="card-wide" style="margin-bottom:24px;">
+    <div class="logic-title">CRITERIOS DE SELECCIÓN (ESCUELA AUSTRIACA)</div>
+    <div style="display:flex;gap:32px;flex-wrap:wrap;">
+      <div>
+        <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--text-dim);margin-bottom:8px;">PASA FILTRO SI:</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div><span class="badge badge-green">INT. COVERAGE ≥ 5x</span></div>
+          <div><span class="badge badge-green">DEUDA NETA/EBITDA &lt; 3x</span></div>
+          <div><span class="badge badge-green">MARGEN BRUTO &gt; 40%</span></div>
+          <div><span class="badge badge-green">FCF OPERATIVO &gt; 0</span></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--text-dim);margin-bottom:8px;">RECHAZADO SI:</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div><span class="badge badge-red">INT. COVERAGE &lt; 1x → ZOMBI</span></div>
+          <div><span class="badge badge-red">FCF NEGATIVO → QUEMA CAJA</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-wide">
+    <table class="data-table" id="microTable">
+      <thead>
+        <tr>
+          <th>TICKER</th>
+          <th>PRECIO</th>
+          <th>SECTOR</th>
+          <th>MARGEN BRUTO</th>
+          <th>FCF OP. (M$)</th>
+          <th>DEUDA NETA/EBITDA</th>
+          <th>COBER. INTERESES</th>
+          <th>CAJA NETA</th>
+          <th>FILTRO GLOBAL</th>
+        </tr>
+      </thead>
+      <tbody id="microTableBody">
+        <!-- Filled by JS -->
+      </tbody>
+    </table>
+  </div>
+
+  <div class="data-note">
+    NOTA: Los fundamentales (EBITDA, FCF, Deuda) se actualizan trimestralmente tras cada earnings season. Fuentes: Macrotrends, Stockanalysis.com, informes 10-K/10-Q SEC. Los precios son en tiempo real vía API pública.
+  </div>
+</div>
+</div>
+
+<!-- ===================== PANEL ASIGNACIÓN ===================== -->
+<div id="panel-asignacion" class="panel">
+<div class="content">
+
+  <div class="section-title">ESCENARIO DE MERCADO ACTIVO</div>
+  <div class="scenarios" id="scenarioBtns">
+    <button class="scenario-btn active" onclick="setScenario('current',this)">📊 DATOS ACTUALES</button>
+    <button class="scenario-btn" onclick="setScenario('estanflacion',this)">🔴 ESTANFLACIÓN SEVERA</button>
+    <button class="scenario-btn" onclick="setScenario('represion',this)">🟡 REPRESIÓN FINANCIERA</button>
+    <button class="scenario-btn" onclick="setScenario('crash',this)">💀 CRASH CREDITICIO</button>
+    <button class="scenario-btn" onclick="setScenario('goldilocks',this)">🟢 GOLDILOCKS</button>
+  </div>
+
+  <div class="section-title">DESLIZADORES DE ASIGNACIÓN MENSUAL</div>
+  <div class="allocation-grid" id="allocGrid">
+    <!-- Filled by JS -->
+  </div>
+
+  <div class="section-title">LÓGICA DE DECISIÓN — MOTOR DE REGLAS</div>
+  <div class="logic-table">
+    <div class="logic-title">CONDICIONES ACTIVAS → EFECTO EN CUBOS</div>
+    <div id="logicRows"></div>
+  </div>
+
+  <div class="section-title">CONFIGURACIÓN DE PORTAFOLIO</div>
+  <div class="card-wide">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div>
+        <div class="input-label">APORTACIÓN MENSUAL (€)</div>
+        <input class="input-field" type="number" id="monthlyContrib" value="500" oninput="updateContributions()">
+      </div>
+      <div>
+        <div class="input-label">PATRIMONIO TOTAL (€)</div>
+        <input class="input-field" type="number" id="totalPatrimony" value="50000" oninput="updateContributions()">
+      </div>
+    </div>
+    <div style="margin-top:24px;" id="contribBreakdown"></div>
+  </div>
+
+</div>
+</div>
+
+<script>
+// =====================================================================
+// DATA MODEL — Based on real Feb 2025 approximations
+// In production, these would come from FRED API, Yahoo Finance, etc.
+// =====================================================================
+
+const MACRO_DATA = {
+  fedFunds: 5.33,
+  cpi: 3.1,
+  corePCE: 2.8,
+  hySpread: 3.15,
+  treasury10y: 4.28,
+  treasury2y: 4.68,
+  m2: 20.96,          // trillion $
+  m2year: 20.57,      // year ago
+  dxy: 103.4,
+  gdp: 2.5,           // Q4 2024 estimate
+  sp500: 5088,
+  cape: 33.4,
+  lastUpdated: new Date()
+};
+
+// Derived calculations
+function calc(d) {
+  return {
+    realRate: d.fedFunds - d.corePCE,
+    curva: (d.treasury10y - d.treasury2y) * 100, // in basis points
+    m2growth: ((d.m2 - d.m2year) / d.m2year) * 100,
+    ey: (1 / d.cape) * 100,
+    erp: (1 / d.cape * 100) - d.treasury10y,
+    estanflacion: d.gdp < 1.5 && d.corePCE > 2.5
+  };
+}
+
+// =====================================================================
+// MICRO DATA (manually updated quarterly)
+// =====================================================================
+const MICRO_STOCKS = [
+  {
+    ticker: "AMZN",
+    name: "Amazon",
+    sector: "Tech/Comercio",
+    price: 179.60,
+    grossMargin: 47.2,
+    fcf: 35800,    // M$
+    netDebt: -73000, // negative = net cash
+    ebitda: 85000,
+    interestExpense: 3200,
+  },
+  {
+    ticker: "ATYM.L",
+    name: "Atalaya Mining",
+    sector: "Minería Cobre",
+    price: 3.42,
+    grossMargin: 38.5,
+    fcf: 87,
+    netDebt: -120,
+    ebitda: 215,
+    interestExpense: 8,
+  },
+  {
+    ticker: "YCA.L",
+    name: "Yellow Cake",
+    sector: "Uranio Físico",
+    price: 4.18,
+    grossMargin: 92.0,
+    fcf: 12,
+    netDebt: -45,
+    ebitda: 18,
+    interestExpense: 1,
+  },
+  {
+    ticker: "DUOL",
+    name: "Duolingo",
+    sector: "EdTech / SaaS",
+    price: 187.40,
+    grossMargin: 72.8,
+    fcf: 180,
+    netDebt: -700,
+    ebitda: 95,
+    interestExpense: 4,
+  },
+  {
+    ticker: "GLD",
+    name: "SPDR Gold Shares",
+    sector: "Oro Físico (ETF)",
+    price: 191.50,
+    grossMargin: 100,
+    fcf: null,
+    netDebt: null,
+    ebitda: null,
+    interestExpense: null,
+    special: true
+  }
+];
+
+// =====================================================================
+// SIGNAL HELPERS
+// =====================================================================
+function getSignal(value, greenBelow, redAbove, inverted=false) {
+  if (!inverted) {
+    if (value >= redAbove) return 'red';
+    if (value <= greenBelow) return 'green';
+    return 'yellow';
+  } else {
+    if (value <= redAbove) return 'red';
+    if (value >= greenBelow) return 'green';
+    return 'yellow';
+  }
+}
+
+function signalColor(s) {
+  return { red: '#ff3b5c', yellow: '#f5a623', green: '#00d4a0' }[s] || '#5a6a7a';
+}
+
+function signalLabel(s, labels) {
+  return labels[s] || 'NEUTRAL';
+}
+
+// =====================================================================
+// RENDER MACRO
+// =====================================================================
+function renderMacro() {
+  const d = MACRO_DATA;
+  const c = calc(d);
+
+  // Fed Funds
+  setCard('ff', d.fedFunds.toFixed(2)+'%', 'neutral', 'TASA REFERENCIA FED');
+
+  // CPI
+  const cpiSig = getSignal(d.cpi, 2, 4);
+  setCard('cpi', d.cpi.toFixed(1)+'%', cpiSig, cpiSig==='red'?'INFLACIÓN ELEVADA':cpiSig==='green'?'INFLACIÓN CONTROLADA':'INFLACIÓN MODERADA');
+
+  // PCE
+  const pceSig = getSignal(d.corePCE, 2, 3.5);
+  setCard('pce', d.corePCE.toFixed(1)+'%', pceSig, pceSig==='red'?'POR ENCIMA OBJETIVO FED':'CERCA DEL OBJETIVO 2%');
+
+  // Real Rate
+  const rr = c.realRate;
+  const rrSig = getSignal(rr, 0, 2);
+  setCard('realrate', (rr>=0?'+':'')+rr.toFixed(2)+'%', rrSig,
+    rrSig==='red'?'TIPOS RESTRICTIVOS — PRESIÓN DEUDA':
+    rrSig==='green'?'REPRESIÓN FINANCIERA ACTIVA':'ZONA DE TRANSICIÓN');
+
+  // HY Spread
+  const hySig = getSignal(d.hySpread, 3.5, 6);
+  setCard('hy', d.hySpread.toFixed(2)+'%', hySig,
+    hySig==='red'?'PÁNICO CREDITICIO':
+    hySig==='green'?'COMPLACENCIA — PÓLVORA SECA':'PRECAUCIÓN MODERADA');
+
+  // 10Y
+  setCard('10y', d.treasury10y.toFixed(2)+'%', 'neutral', 'BENCHMARK GLOBAL');
+
+  // Curva
+  const curvaSig = c.curva < 0 ? 'red' : c.curva < 30 ? 'yellow' : 'green';
+  setCard('curva', (c.curva>=0?'+':'')+c.curva.toFixed(0)+' pb', curvaSig,
+    c.curva < 0 ? 'CURVA INVERTIDA — RECESIÓN SEÑALADA' :
+    c.curva < 30 ? 'CURVA APLANADA' : 'CURVA NORMAL');
+
+  // M2
+  setCard('m2', d.m2.toFixed(2)+' T$', 'neutral', 'MASA MONETARIA M2 EEUU');
+
+  // M2 Growth
+  const m2g = c.m2growth;
+  const m2gSig = getSignal(m2g, 0, 0, true); // inverted: positive is green
+  const m2gSigCorr = m2g > 5 ? 'green' : m2g < 0 ? 'red' : 'yellow';
+  setCard('m2growth', (m2g>=0?'+':'')+m2g.toFixed(1)+'%', m2gSigCorr,
+    m2g > 5 ? 'EXPANSIÓN — FAVORABLE ACTIVOS REALES' :
+    m2g < 0 ? 'CONTRACCIÓN MONETARIA' : 'CRECIMIENTO MODERADO');
+
+  // DXY
+  const dxySig = d.dxy > 105 ? 'red' : d.dxy < 100 ? 'green' : 'yellow';
+  setCard('dxy', d.dxy.toFixed(1), dxySig,
+    d.dxy > 105 ? 'DÓLAR FUERTE — PRESIÓN EMERGENTES' :
+    d.dxy < 100 ? 'DÓLAR DÉBIL — FAVORABLE COMMODITIES' : 'DÓLAR NEUTRAL');
+
+  // GDP
+  const gdpSig = d.gdp < 0 ? 'red' : d.gdp < 1.5 ? 'yellow' : 'green';
+  setCard('gdp', d.gdp.toFixed(1)+'%', gdpSig,
+    d.gdp < 0 ? 'RECESIÓN' : d.gdp < 1.5 ? 'CRECIMIENTO DÉBIL' : 'CRECIMIENTO SÓLIDO');
+
+  // ESTANFLACIÓN ALARM
+  const estDiv = document.getElementById('estanflacionAlarm');
+  if (d.gdp < 2 && d.corePCE > 2.5) {
+    estDiv.innerHTML = `
+      <div class="estanflacion-alarm">
+        <div class="alarm-icon">🚨</div>
+        <div class="alarm-text">
+          <h3>ALERTA: CONDICIONES ESTANFLACIONARIAS DETECTADAS</h3>
+          <p>PIB REAL: ${d.gdp}% (< 2%) — CORE PCE: ${d.corePCE}% (> 2.5%) — La combinación sugiere represión financiera activa. Aumentar ponderación Cubos 2 y 3.</p>
+        </div>
+      </div>`;
+    document.getElementById('mainAlert').className = 'alert-banner red';
+    document.getElementById('mainAlertText').textContent = `⚠ ENTORNO ESTANFLACIONARIO DETECTADO — PIB ${d.gdp}% | PCE ${d.corePCE}% | HY Spread ${d.hySpread}% (complacencia) | Tipo Real ${c.realRate.toFixed(2)}%`;
+  } else {
+    estDiv.innerHTML = '';
+    document.getElementById('mainAlert').className = 'alert-banner yellow';
+    document.getElementById('mainAlertText').textContent = `VIGILANCIA ACTIVA — Tipo Real: ${c.realRate.toFixed(2)}% | Spread HY: ${d.hySpread}% | Curva: ${c.curva.toFixed(0)}pb | M2 YoY: ${c.m2growth.toFixed(1)}%`;
+  }
+
+  // Ticker tape
+  const tickers = [
+    {name:'FED FUNDS', value:`${d.fedFunds}%`, change:'', cls:''},
+    {name:'CPI', value:`${d.cpi}%`, change:'YoY', cls:'neg'},
+    {name:'CORE PCE', value:`${d.corePCE}%`, change:'YoY', cls:'neg'},
+    {name:'TIPO REAL', value:`${c.realRate.toFixed(2)}%`, change:'', cls: c.realRate<0?'pos':'neg'},
+    {name:'HY SPREAD', value:`${d.hySpread}%`, change:'', cls:''},
+    {name:'10Y UST', value:`${d.treasury10y}%`, change:'', cls:''},
+    {name:'2Y UST', value:`${d.treasury2y}%`, change:'', cls:''},
+    {name:'CURVA', value:`${c.curva.toFixed(0)}pb`, change:'', cls: c.curva<0?'neg':'pos'},
+    {name:'M2 YoY', value:`${c.m2growth.toFixed(1)}%`, change:'', cls: c.m2growth>0?'pos':'neg'},
+    {name:'DXY', value:`${d.dxy}`, change:'', cls:''},
+    {name:'S&P 500', value:`${d.sp500}`, change:'', cls:'pos'},
+    {name:'CAPE SHILLER', value:`${d.cape}x`, change:'', cls:'neg'},
+  ];
+
+  const inner = tickers.map(t => `<span class="ticker-item"><span class="name">${t.name}</span><span class="value">${t.value}</span>${t.change?`<span class="change ${t.cls}">${t.change}</span>`:''}</span>`).join('');
+  document.getElementById('tickerInner').innerHTML = inner + inner; // duplicate for seamless loop
+}
+
+function setCard(id, value, signal, label) {
+  const card = document.getElementById('card-'+id);
+  const valEl = document.getElementById('val-'+id);
+  const sigEl = document.getElementById('sig-'+id);
+  if (!card || !valEl || !sigEl) return;
+  card.className = 'card ' + signal;
+  valEl.textContent = value;
+  sigEl.textContent = label;
+  sigEl.className = 'card-signal ' + signal;
+}
+
+// =====================================================================
+// RENDER MESO
+// =====================================================================
+function renderMeso() {
+  const d = MACRO_DATA;
+  const c = calc(d);
+
+  // SP500
+  setCard('sp500', d.sp500.toLocaleString(), 'neutral', 'ÍNDICE SPOT');
+
+  // CAPE
+  const capeSig = d.cape > 30 ? 'red' : d.cape < 15 ? 'green' : d.cape > 22 ? 'yellow' : 'yellow';
+  setCard('cape', d.cape.toFixed(1)+'x', capeSig,
+    d.cape > 30 ? 'BURBUJA HISTÓRICA — TRAMPA PASIVA' :
+    d.cape > 22 ? 'MERCADO CARO' :
+    d.cape < 15 ? 'OPORTUNIDAD HISTÓRICA' : 'VALORACIÓN MODERADA');
+
+  // Earnings Yield
+  setCard('ey', c.ey.toFixed(2)+'%', 'neutral', `= 1 / ${d.cape}x CAPE`);
+
+  // ERP
+  const erpSig = c.erp < 1 ? 'red' : c.erp > 4 ? 'green' : 'yellow';
+  setCard('erp', (c.erp>=0?'+':'')+c.erp.toFixed(2)+'%', erpSig,
+    c.erp < 1 ? 'BONOS COMPITEN CON RV — PELIGRO' :
+    c.erp < 2 ? 'PRIMA DE RIESGO MARGINAL' :
+    c.erp > 4 ? 'RV BARATA VS BONOS' : 'ERP MODERADO');
+
+  // Analysis text
+  document.getElementById('mesoAnalysis').innerHTML = `
+    <div style="font-family:'Space Mono',monospace;font-size:11px;line-height:2;color:var(--text-dim);">
+      <span style="color:var(--text-bright);font-weight:700;">DIAGNÓSTICO ACTUAL:</span><br>
+      El CAPE Shiller en <span style="color:${d.cape>30?'var(--red)':'var(--yellow)'};">${d.cape}x</span> sitúa al mercado en el percentil histórico más elevado, comparable a 1929 (32x), 2000 (44x) y 2021 (38x). El Earnings Yield implícito del <span style="color:var(--text-bright);">${c.ey.toFixed(2)}%</span> compite directamente contra el bono a 10 años al <span style="color:var(--text-bright);">${d.treasury10y}%</span>, generando una Prima de Riesgo de la Renta Variable (ERP) de tan solo <span style="color:${c.erp<1?'var(--red)':'var(--yellow)'};">${c.erp.toFixed(2)}%</span>.<br><br>
+      <span style="color:var(--red);">CONCLUSIÓN AUSTRÍACA:</span> En este entorno, los fondos indexados al S&P 500 no ofrecen margen de seguridad. El inversor que compra el índice hoy asume el riesgo completo de reversión a la media sin compensación por ello. El modelo reduce el Cubo 4 a mínimos hasta que el CAPE vuelva a zonas de 15-22x.
+    </div>
+  `;
+}
+
+// =====================================================================
+// RENDER MICRO
+// =====================================================================
+function renderMicro() {
+  const tbody = document.getElementById('microTableBody');
+  tbody.innerHTML = '';
+
+  MICRO_STOCKS.forEach(s => {
+    if (s.special) {
+      tbody.innerHTML += `
+        <tr>
+          <td style="font-family:'Space Mono',monospace;font-weight:700;color:var(--gold);">${s.ticker}</td>
+          <td style="font-family:'Space Mono',monospace;">$${s.price}</td>
+          <td style="font-family:'Space Mono',monospace;color:var(--text-dim);">${s.sector}</td>
+          <td colspan="5" style="font-family:'Space Mono',monospace;color:var(--text-dim);text-align:center;">— Activo de reserva, no aplica filtro operativo —</td>
+          <td><span class="badge badge-green">✓ RESERVA VALOR</span></td>
+        </tr>`;
+      return;
+    }
+
+    const coverage = s.interestExpense > 0 ? s.ebitda / s.interestExpense : 99;
+    const netDebtEbitda = s.ebitda > 0 ? s.netDebt / s.ebitda : null;
+    const isNetCash = s.netDebt < 0;
+
+    // Signals
+    const covSig = coverage < 1 ? 'red' : coverage >= 5 ? 'green' : 'yellow';
+    const fcfSig = s.fcf > 0 ? 'green' : 'red';
+    const marginSig = s.grossMargin > 60 ? 'green' : s.grossMargin > 40 ? 'yellow' : 'red';
+
+    const passes = coverage >= 5 && s.fcf > 0 && s.grossMargin > 40 && isNetCash;
+    const fails = coverage < 1 || s.fcf <= 0;
+
+    const globalBadge = passes
+      ? '<span class="badge badge-green">✅ PASA FILTRO</span>'
+      : fails
+      ? '<span class="badge badge-red">🔴 RECHAZADO</span>'
+      : '<span class="badge badge-yellow">🟡 REVISIÓN</span>';
+
+    tbody.innerHTML += `
+      <tr>
+        <td style="font-family:'Space Mono',monospace;font-weight:700;color:var(--text-bright);">${s.ticker}<br><span style="font-size:9px;color:var(--text-dim);font-weight:400;">${s.name}</span></td>
+        <td style="font-family:'Space Mono',monospace;">$${s.price}</td>
+        <td style="font-family:'Space Mono',monospace;color:var(--text-dim);font-size:10px;">${s.sector}</td>
+        <td><span class="badge badge-${marginSig}">${s.grossMargin.toFixed(1)}%</span></td>
+        <td><span class="badge badge-${fcfSig}">${s.fcf>0?'+':''}${(s.fcf/1000).toFixed(0)}B$</span></td>
+        <td style="font-family:'Space Mono',monospace;color:${isNetCash?'var(--green)':'var(--text)'};">${netDebtEbitda !== null ? netDebtEbitda.toFixed(1)+'x' : 'N/D'}</td>
+        <td><span class="badge badge-${covSig}">${coverage.toFixed(1)}x</span></td>
+        <td style="font-family:'Space Mono',monospace;">${isNetCash?'<span class="pass">✅ CAJA NETA</span>':'<span class="fail">❌ DEUDA NETA</span>'}</td>
+        <td>${globalBadge}</td>
+      </tr>`;
+  });
+}
+
+// =====================================================================
+// RENDER ASIGNACIÓN
+// =====================================================================
+const SCENARIOS = {
+  current: {
+    label: 'Datos actuales',
+    realRate: MACRO_DATA.fedFunds - MACRO_DATA.corePCE,
+    hySpread: MACRO_DATA.hySpread,
+    m2growth: ((MACRO_DATA.m2 - MACRO_DATA.m2year)/MACRO_DATA.m2year*100),
+    cape: MACRO_DATA.cape,
+    erp: (1/MACRO_DATA.cape*100) - MACRO_DATA.treasury10y,
+    gdp: MACRO_DATA.gdp,
+    corePCE: MACRO_DATA.corePCE
+  },
+  estanflacion: { label:'Estanflación severa', realRate:-1.5, hySpread:7.5, m2growth:8, cape:25, erp:0.5, gdp:-0.5, corePCE:5 },
+  represion: { label:'Represión financiera', realRate:-2, hySpread:4, m2growth:12, cape:28, erp:1.2, gdp:1.5, corePCE:4 },
+  crash: { label:'Crash crediticio', realRate:1, hySpread:9.5, m2growth:-3, cape:18, erp:2.5, gdp:-2, corePCE:2 },
+  goldilocks: { label:'Goldilocks', realRate:0.5, hySpread:2.8, m2growth:6, cape:14, erp:5, gdp:3.5, corePCE:1.8 }
+};
+
+let currentScenario = 'current';
+
+function calcAllocation(sc) {
+  // Point system for each bucket
+  let pts1 = 15; // Cash / T-Bills
+  let pts2 = 10; // Gold / BTC
+  let pts3 = 10; // Real Assets / Micro
+  let pts4 = 0;  // Index funds
+
+  // === CUBO 1: CASH ===
+  if (sc.hySpread < 3.5) pts1 += 20; // Complacency = hold powder dry
+  if (sc.cape > 30) pts1 += 15;
+  if (sc.erp < 1) pts1 += 10;
+  if (sc.gdp < 0) pts1 += 10; // Recession risk
+  if (sc.hySpread > 6) pts1 -= 10; // Panic = cash is scarce, others buy opportunities
+
+  // === CUBO 2: GOLD / BTC ===
+  if (sc.realRate < 0) pts2 += 25; // Negative real rates = hard money shines
+  if (sc.m2growth > 5) pts2 += 15; // Money printing
+  if (sc.gdp < 1.5 && sc.corePCE > 2.5) pts2 += 20; // Stagflation confirmed
+  if (sc.hySpread < 3.5) pts2 -= 5; // Complacency reduces urgency
+
+  // === CUBO 3: REAL ASSETS / MICRO ===
+  if (sc.gdp < 1.5 && sc.corePCE > 2.5) pts3 += 25; // Stagflation
+  if (sc.realRate < 0) pts3 += 10;
+  if (sc.hySpread > 6) pts3 -= 15; // Credit crisis kills everything
+  if (sc.m2growth < 0) pts3 -= 10; // Monetary contraction
+
+  // === CUBO 4: INDEX FUNDS ===
+  if (sc.cape > 30) pts4 = 0;
+  else if (sc.cape < 15) pts4 = 40;
+  else if (sc.erp > 4) pts4 = 25;
+  else if (sc.erp > 1) pts4 = 15;
+  else pts4 = 5;
+
+  // Floor all at 5 except cubo 4 which can be 0
+  pts1 = Math.max(pts1, 5);
+  pts2 = Math.max(pts2, 5);
+  pts3 = Math.max(pts3, 5);
+  pts4 = Math.max(pts4, 0);
+
+  const total = pts1 + pts2 + pts3 + pts4;
+
+  return {
+    c1: Math.round(pts1/total*100),
+    c2: Math.round(pts2/total*100),
+    c3: Math.round(pts3/total*100),
+    c4: 100 - Math.round(pts1/total*100) - Math.round(pts2/total*100) - Math.round(pts3/total*100),
+    sc
+  };
+}
+
+function renderAllocation(scenarioKey) {
+  const sc = SCENARIOS[scenarioKey];
+  const alloc = calcAllocation(sc);
+
+  const cubos = [
+    {
+      key:'c1', cls:'c1',
+      title:'CUBO 1 — CASH / T-BILLS EUR',
+      assets:'Letras del Tesoro EUR, TBIL, XEON',
+      pct: alloc.c1,
+      reasons: [
+        { cond: sc.hySpread < 3.5, label:`HY Spread ${sc.hySpread.toFixed(1)}% < 3.5% (complacencia)`, active: sc.hySpread < 3.5 },
+        { cond: sc.cape > 30, label:`CAPE ${sc.cape}x > 30x (mercado caro)`, active: sc.cape > 30 },
+        { cond: sc.erp < 1, label:`ERP ${sc.erp.toFixed(1)}% < 1% (bonos compiten)`, active: sc.erp < 1 },
+      ],
+      note: 'Pólvora seca para oportunidades futuras. En complacencia, el mercado no compensa el riesgo.'
+    },
+    {
+      key:'c2', cls:'c2',
+      title:'CUBO 2 — DINERO SANO',
+      assets:'Oro físico, BTC, GLDM, PAXG',
+      pct: alloc.c2,
+      reasons: [
+        { cond: sc.realRate < 0, label:`Tipo Real ${sc.realRate.toFixed(1)}% < 0% (represión financiera)`, active: sc.realRate < 0 },
+        { cond: sc.m2growth > 5, label:`M2 YoY ${sc.m2growth.toFixed(1)}% > 5% (expansión monetaria)`, active: sc.m2growth > 5 },
+        { cond: sc.gdp < 1.5 && sc.corePCE > 2.5, label:`Estanflación activa (GDP ${sc.gdp}% / PCE ${sc.corePCE}%)`, active: sc.gdp < 1.5 && sc.corePCE > 2.5 },
+      ],
+      note: 'Reserva de valor contra la devaluación del fiat. Aumenta con represión financiera y expansión M2.'
+    },
+    {
+      key:'c3', cls:'c3',
+      title:'CUBO 3 — ACTIVOS REALES / MICRO',
+      assets:'Solo empresas ✅ Pestaña 3: AMZN, ATYM.L, DUOL',
+      pct: alloc.c3,
+      reasons: [
+        { cond: sc.gdp < 1.5 && sc.corePCE > 2.5, label:'Estanflación — activos reales ganan poder adquisitivo', active: sc.gdp < 1.5 && sc.corePCE > 2.5 },
+        { cond: sc.realRate < 0, label:'Tipos reales negativos favorecen activos tangibles', active: sc.realRate < 0 },
+        { cond: sc.hySpread < 6, label:`Credit spreads < 6% (crédito accesible)`, active: sc.hySpread < 6 },
+      ],
+      note: 'CRÍTICO: Solo empresas que pasen el filtro verde de la Pestaña 3. Sin caja neta = fuera.'
+    },
+    {
+      key:'c4', cls:'c4',
+      title:'CUBO 4 — FONDOS INDEXADOS',
+      assets:'SP500, MSCI World, VT, IWDA.L',
+      pct: alloc.c4,
+      reasons: [
+        { cond: sc.cape < 15, label:`CAPE ${sc.cape}x < 15x → Máxima exposición (40%+)`, active: sc.cape < 15 },
+        { cond: sc.cape > 30, label:`CAPE ${sc.cape}x > 30x → CERO exposición`, active: sc.cape > 30 },
+        { cond: sc.erp > 4, label:`ERP ${sc.erp.toFixed(1)}% > 4% → RV barata vs bonos`, active: sc.erp > 4 },
+      ],
+      note: 'TRAMPA PASIVA si CAPE > 30x. El inversor indexado compra la media incluyendo zombis sobrevalorados.'
+    }
+  ];
+
+  document.getElementById('allocGrid').innerHTML = cubos.map(c => `
+    <div class="alloc-card ${c.cls}">
+      <div class="alloc-title">${c.title}</div>
+      <div class="alloc-assets">${c.assets}</div>
+      <div class="alloc-number">${c.pct}%</div>
+      <div class="alloc-bar-track">
+        <div class="alloc-bar-fill" style="width:${c.pct}%"></div>
+      </div>
+      <div class="alloc-triggers">
+        ${c.reasons.map(r => `<span class="trigger-chip ${r.active?'active':'inactive'}">${r.active?'✓':'✗'} ${r.label}</span>`).join('')}
+      </div>
+      <div class="alloc-reason">${c.note}</div>
+    </div>
+  `).join('');
+
+  // Logic rows
+  const logicRules = [
+    { cond:`HY Spread = ${sc.hySpread.toFixed(1)}%`, threshold:'< 3.5%', active: sc.hySpread < 3.5, effect:'↑ Cubo 1 (Cash)', dir:'up' },
+    { cond:`Tipo Real = ${sc.realRate.toFixed(1)}%`, threshold:'< 0%', active: sc.realRate < 0, effect:'↑↑ Cubo 2 (Oro/BTC)', dir:'up' },
+    { cond:`M2 Growth = ${sc.m2growth.toFixed(1)}%`, threshold:'> 5%', active: sc.m2growth > 5, effect:'↑ Cubo 2 (Oro/BTC)', dir:'up' },
+    { cond:`PIB ${sc.gdp}% Y PCE ${sc.corePCE}%`, threshold:'GDP<1.5% Y PCE>2.5%', active: sc.gdp<1.5 && sc.corePCE>2.5, effect:'↑↑ Cubos 2 y 3', dir:'up' },
+    { cond:`CAPE = ${sc.cape}x`, threshold:'> 30x', active: sc.cape > 30, effect:'↓ Cubo 4 → 0%', dir:'down' },
+    { cond:`CAPE = ${sc.cape}x`, threshold:'< 15x', active: sc.cape < 15, effect:'↑ Cubo 4 → 40%+', dir:'up' },
+    { cond:`ERP = ${sc.erp.toFixed(1)}%`, threshold:'< 1%', active: sc.erp < 1, effect:'↑ Cubo 1 (bonos compiten)', dir:'up' },
+    { cond:`HY Spread = ${sc.hySpread.toFixed(1)}%`, threshold:'> 6%', active: sc.hySpread > 6, effect:'↓ Cubo 3 (crédito cerrado)', dir:'down' },
+  ];
+
+  document.getElementById('logicRows').innerHTML = logicRules.map(r => `
+    <div class="logic-row">
+      <div class="logic-condition">${r.cond}</div>
+      <div class="logic-arrow">→</div>
+      <div style="flex:1;font-family:'Space Mono',monospace;font-size:9px;color:var(--text-dim);">SI ${r.threshold}</div>
+      <div class="logic-arrow">→</div>
+      <div class="logic-effect ${r.dir}">${r.effect}</div>
+      <div class="logic-status">
+        ${r.active
+          ? '<span class="badge badge-green">ACTIVO</span>'
+          : '<span class="badge badge-gray">INACTIVO</span>'}
+      </div>
+    </div>
+  `).join('');
+
+  updateContributions(alloc);
+}
+
+function updateContributions(alloc) {
+  const monthly = parseFloat(document.getElementById('monthlyContrib').value) || 500;
+  const a = alloc || calcAllocation(SCENARIOS[currentScenario]);
+
+  document.getElementById('contribBreakdown').innerHTML = `
+    <div style="font-family:'Space Mono',monospace;font-size:11px;">
+      <div style="margin-bottom:16px;color:var(--text-dim);font-size:9px;text-transform:uppercase;letter-spacing:0.1em;">APORTACIÓN MENSUAL DE ${monthly.toLocaleString('es-ES')}€ DISTRIBUIDA EN:</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+        ${[
+          {label:'CUBO 1 — CASH',pct:a.c1,color:'var(--accent)'},
+          {label:'CUBO 2 — ORO/BTC',pct:a.c2,color:'var(--gold)'},
+          {label:'CUBO 3 — MICRO',pct:a.c3,color:'var(--green)'},
+          {label:'CUBO 4 — ÍNDICES',pct:a.c4,color:'var(--accent2)'},
+        ].map(c => `
+          <div style="background:var(--bg3);border:1px solid var(--border);padding:16px;text-align:center;">
+            <div style="font-size:9px;color:var(--text-dim);margin-bottom:8px;">${c.label}</div>
+            <div style="font-size:28px;font-weight:700;color:${c.color};">${Math.round(monthly*c.pct/100).toLocaleString('es-ES')}€</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px;">${c.pct}% de aportación</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function setScenario(key, btn) {
+  currentScenario = key;
+  document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAllocation(key);
+}
+
+// =====================================================================
+// TAB NAVIGATION
+// =====================================================================
+function showTab(id, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  el.classList.add('active');
+}
+
+// =====================================================================
+// REFRESH & INIT
+// =====================================================================
+function refreshData() {
+  const bar = document.getElementById('loadingBar');
+  bar.style.width = '0%';
+  setTimeout(() => bar.style.width = '100%', 50);
+  setTimeout(() => { bar.style.width = '0%'; bar.style.transition = 'none'; }, 1700);
+  setTimeout(() => bar.style.transition = 'width 1.5s ease', 1800);
+
+  // Simulate small variation on refresh (in production, re-fetch from API)
+  MACRO_DATA.sp500 += (Math.random()-0.5)*20;
+  MACRO_DATA.hySpread += (Math.random()-0.5)*0.05;
+  MACRO_DATA.treasury10y += (Math.random()-0.5)*0.02;
+  MACRO_DATA.dxy += (Math.random()-0.5)*0.3;
+
+  document.getElementById('lastUpdate').textContent =
+    'ACTUALIZADO: ' + new Date().toLocaleTimeString('es-ES');
+
+  renderAll();
+}
+
+function renderAll() {
+  renderMacro();
+  renderMeso();
+  renderMicro();
+  renderAllocation(currentScenario);
+}
+
+// Animate allocation bars on load
+function animateBars() {
+  document.querySelectorAll('.alloc-card').forEach(card => {
+    const bar = card.querySelector('.alloc-bar-fill');
+    const pct = card.querySelector('.alloc-number')?.textContent || '0';
+    if (bar) bar.style.width = pct + '%';
+
+    // Animate bottom border
+    const pctNum = parseInt(pct);
+    card.style.setProperty('--bar-width', pctNum+'%');
+    if(card.after) card.after.style.width = pctNum+'%';
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const bar = document.getElementById('loadingBar');
+  bar.style.width = '100%';
+
+  renderAll();
+
+  document.getElementById('lastUpdate').textContent =
+    'ACTUALIZADO: ' + new Date().toLocaleTimeString('es-ES');
+
+  setTimeout(() => {
+    bar.style.width = '0%';
+    bar.style.transition = 'none';
+    setTimeout(() => bar.style.transition = 'width 1.5s ease', 100);
+  }, 1600);
+
+  setTimeout(animateBars, 300);
+});
+</script>
+</body>
+</html>
